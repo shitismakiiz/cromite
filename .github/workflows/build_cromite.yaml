@@ -17,15 +17,15 @@ on:
       sha:
         description: 'uazo/cromite SHA'
         required: true
-        default: 'uazo/cromite SHA'
+        default: ''
       target_os:
         description: 'targetos [android/win/linux/all]'
         required: true
-        default: 'android'
+        default: 'all'
       build:
         description: 'android arch [arm/arm64/x64/all]'
         required: true
-        default: 'arm64'
+        default: 'all'
       type:
         description: 'runner? [dev/ci]'
         required: true
@@ -250,6 +250,9 @@ jobs:
           gpg --homedir ./ -d --passphrase "${{ secrets.KEYSTORE_PASSPHRASE }}" --batch cromite.keystore.asc > cromite.keystore
           echo "::endgroup::"
 
+          # bootstrap python3 for gn
+          echo ../../../../../usr/bin >$WORKSPACE/depot_tools/python3_bin_reldir.txt
+
       - name: Build Cromite Android x64
         if: ${{ (github.event.inputs.target_os == 'android' || github.event.inputs.target_os == 'all') && (github.event.inputs.build == 'x64' || github.event.inputs.build == 'all') }}
         shell: bash
@@ -431,5 +434,5 @@ jobs:
             gn gen --args="import(\"/home/lg/working_dir/cromite/build/cromite.gn_args\") $(cat ../../build_args.gni) skip_clangd_unsupported_options = true" out/clangd && \
             $WORKSPACE/ninja/ninja -C $WORKSPACE/chromium/src/out/clangd -a chrome_public_apk \
               -t compdb cc cxx objc objcxx >$WORKSPACE/chromium/src/out/clangd/compile_commands.json && \
-            /home/lg/working_dir/clangd_snapshot_20211205/bin/clangd-indexer --executor=all-TUs out/clangd/compile_commands.json >out/arm64/cromite.idx && \
+            /home/lg/working_dir/clangd_snapshot_20250518/bin/clangd-indexer --executor=all-TUs out/clangd/compile_commands.json >out/arm64/cromite.idx && \
             rm -rf out/clangd
