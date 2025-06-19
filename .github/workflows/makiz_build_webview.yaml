@@ -1,1 +1,66 @@
+name: Build Cromite System WebView
 
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'uazo/cromite SHA'
+        required: true
+        default: ''
+      type:
+        description: 'runner? [dev/ci]'
+        required: true
+        default: 'ci'
+      debug:
+        description: 'debug? [true/false]'
+        required: true
+        default: 'false'
+
+env:
+  CROMITE_SHA: ${{ github.event.inputs.sha }}
+  REMOVEDOCKERSUPPORT: true
+  USELOCALIMAGE: true
+
+jobs:
+  build-webview:
+    runs-on: ${{ github.event.inputs.type }}
+    timeout-minutes: 1440
+    container:
+      image: uazo/cromite-build:build
+      env:
+        REMOVEDOCKERSUPPORT: true
+        USELOCALIMAGE: true
+        USEINTERNALNETWORK: true
+        WORKSPACE: /home/lg/working_dir
+      volumes:
+        - /storage/images/${{ github.event.inputs.sha }}/android/${{ github.event.inputs.debug }}/x64_webview:/home/lg/working_dir/chromium/src/out/x64_webview
+        - /storage/images/${{ github.event.inputs.sha }}/android/${{ github.event.inputs.debug }}/arm64_webview:/home/lg/working_dir/chromium/src/out/arm64_webview
+        - /tmp/proxy:/tmp/proxy
+    steps:
+      - name: Prepare Build Container
+        shell: bash
+        run: |
+          PATH=$WORKSPACE/chromium/src/third_party/llvm-build/Release+Asserts/bin:$WORKSPACE/depot_tools/:/usr/local/go/bin:$WORKSPACE/mtool/bin:$PATH
+          cd $WORKSPACE
+          test -d chromium/src/out/x64_webview || sudo mkdir -p chromium/src/out/x64_webview && sudo chown lg chromium/src/out/x64_webview
+          test -d chromium/src/out/arm64_webview || sudo mkdir -p chromium/src/out/arm64_webview && sudo chown lg chromium/src/out/arm64_webview
+          echo "${{ secrets.KEYSTORE }}" > cromite.keystore.asc
+          gpg --homedir ./ -d --passphrase "${{ secrets.KEYSTORE_PASSPHRASE }}" --batch cromite.keystore.asc > cromite.keystore
+
+      - name: Build Cromite System WebView x64
+        shell: bash
+        run: |
+          PATH=$WORKSPACE/chromium/src/third_party/llvm-build/Release+Asserts/bin:$WORKSPACE/depot_tools/:/usr/local/go/bin:$WORKSPACE/mtool/bin:$PATH
+          cd $WORKSPACE/chromium/src
+          gn gen --args="target_os = \"android\" target_cpu = \"x64\" $(cat /home/lg/working_dir/cromite/build/cromite.gn_args) system_webview_package_name=\"com.android.webview\" enable_trybot_verification=false " out/x64_webview
+          ninja -C out/x64_webview system_webview_apk system_webview_shell
+          cp ../../cromite/build/RELEASE out/x64_webview
+
+      - name: Build Cromite System WebView arm64
+        shell: bash
+        run: |
+          PATH=$WORKSPACE/chromium/src/third_party/llvm-build/Release+Asserts/bin:$WORKSPACE/depot_tools/:/usr/local/go/bin:$WORKSPACE/mtool/bin:$PATH
+          cd $WORKSPACE/chromium/src
+          gn gen --args="target_os = \"android\" target_cpu = \"arm64\" $(cat /home/lg/working_dir/cromite/build/cromite.gn_args) system_webview_package_name=\"com.android.webview\" enable_trybot_verification=false " out/arm64_webview
+          ninja -C out/arm64_webview system_webview_apk system_webview_shell
+          cp ../../cromite/build/RELEASE out/arm64_webview
